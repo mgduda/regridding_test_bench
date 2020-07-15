@@ -28,7 +28,7 @@ program main
     ! Retrieve and validate command-line arguments
     !
     if (get_args(src_nc_file, src_part_prefix, dst_nc_file, dst_part_prefix) /= 0) then
-        stop 1
+        call fatal_error()
     end if
 
     write(0,*) 'Hello!'
@@ -117,5 +117,28 @@ contains
         end if
 
     end function get_args
+
+
+    !-----------------------------------------------------------------------
+    !
+    ! fatal_error
+    !
+    ! Terminates execution via a call to MPI_Abort
+    !
+    ! A call to this routine will terminate execution in MPI_COMM_WORLD
+    ! via a call to MPI_Abort. Accordingly, a call to this routine should
+    ! never return.
+    !
+    !-----------------------------------------------------------------------
+    subroutine fatal_error()
+
+        implicit none
+
+        ! Local variables
+        integer :: ierr
+
+        call MPI_Abort(MPI_COMM_WORLD, 1, ierr)
+
+    end subroutine fatal_error
 
 end program main
