@@ -1,9 +1,28 @@
 program main
 
+    use mpi
+
+    integer :: ierr
+    integer :: comm_size, comm_rank
+
     character(len=256) :: src_nc_file, &     ! Name of source mesh netCDF file
                           src_part_prefix, & ! Name of source mesh partition file prefix
                           dst_nc_file, &     ! Name of destination mesh netCDF file
                           dst_part_prefix    ! Name of destination mesh partition file prefix
+
+    !
+    ! Initialize MPI
+    !
+    call MPI_Init(ierr)
+    if (ierr /= MPI_SUCCESS) then
+        write(0,*) ''
+        write(0,*) 'Error: MPI_Init failed ', ierr
+        write(0,*) ''
+        stop 1
+    end if
+
+    call MPI_Comm_rank(MPI_COMM_WORLD, comm_rank, ierr)
+    call MPI_Comm_size(MPI_COMM_WORLD, comm_size, ierr)
 
     !
     ! Retrieve and validate command-line arguments
@@ -13,6 +32,17 @@ program main
     end if
 
     write(0,*) 'Hello!'
+
+    !
+    ! Finalize MPI
+    !
+    call MPI_Finalize(ierr)
+    if (ierr /= MPI_SUCCESS) then
+        write(0,*) ''
+        write(0,*) 'Error: MPI_Finalize failed ', ierr
+        write(0,*) ''
+        stop 1
+    end if
 
     stop
 
