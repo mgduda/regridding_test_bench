@@ -1,4 +1,4 @@
-OBJS = main.o
+OBJS = main.o read_decomp.o
 
 mrtb: $(OBJS)
 	$(FC) $(FFLAGS) $(CPPFLAGS) $(OBJS) $(LIBS) -o mrtb
