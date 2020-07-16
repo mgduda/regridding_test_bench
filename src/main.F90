@@ -1,6 +1,7 @@
 program main
 
     use mpi
+    use iso_c_binding, only : c_char, c_null_char, c_int, c_ptr, c_f_pointer
 
     implicit none
 
@@ -22,8 +23,15 @@ program main
         end subroutine free_element_decomp
     end interface
 
+    integer :: i
     integer :: ierr
     integer :: comm_size, comm_rank
+
+    character(kind=c_char), dimension(:), allocatable, target :: c_filename
+    integer(kind=c_int) :: n_elems_global
+    integer(kind=c_int) :: n_elems
+    type (c_ptr) :: elems_ptr
+    integer(kind=c_int), dimension(:), pointer :: elems
 
     character(len=256) :: src_nc_file, &   ! Name of source mesh netCDF file
                           src_part_file, & ! Name of source mesh partition file
@@ -55,6 +63,19 @@ program main
     end if
 
     write(0,*) 'Hello!'
+
+    allocate(c_filename(len_trim(src_nc_file)+1))
+    do i = 1, len_trim(src_nc_file)
+        c_filename(i) = src_nc_file(i:i)
+    end do
+    c_filename(size(c_filename)) = c_null_char
+
+    call read_element_decomp(MPI_COMM_WORLD, c_filename, n_elems_global, n_elems, elems_ptr)
+    call c_f_pointer(elems_ptr, elems, [n_elems])
+
+    deallocate(c_filename)
+
+    call free_element_decomp(elems_ptr)
 
     !
     ! Finalize MPI
