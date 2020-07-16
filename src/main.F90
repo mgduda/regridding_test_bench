@@ -5,10 +5,10 @@ program main
     integer :: ierr
     integer :: comm_size, comm_rank
 
-    character(len=256) :: src_nc_file, &     ! Name of source mesh netCDF file
-                          src_part_prefix, & ! Name of source mesh partition file prefix
-                          dst_nc_file, &     ! Name of destination mesh netCDF file
-                          dst_part_prefix    ! Name of destination mesh partition file prefix
+    character(len=256) :: src_nc_file, &   ! Name of source mesh netCDF file
+                          src_part_file, & ! Name of source mesh partition file
+                          dst_nc_file, &   ! Name of destination mesh netCDF file
+                          dst_part_file    ! Name of destination mesh partition file
 
     !
     ! Initialize MPI
@@ -25,9 +25,12 @@ program main
     call MPI_Comm_size(MPI_COMM_WORLD, comm_size, ierr)
 
     !
-    ! Retrieve and validate command-line arguments
+    ! Retrieve and validate command-line arguments, converting partition file prefixes
+    ! into full partition filenames based on comm_size
     !
-    if (get_args(src_nc_file, src_part_prefix, dst_nc_file, dst_part_prefix) /= 0) then
+    if (get_args(comm_size, comm_rank, &
+                 src_nc_file, src_part_file, &
+                 dst_nc_file, dst_part_file) /= 0) then
         call fatal_error()
     end if
 
@@ -58,29 +61,44 @@ contains
     ! correct, and, if it is, the command-line arguments are read and returned
     ! in the output arguments.
     !
+    ! Two of the command-line arguments -- the source mesh partition file prefix
+    ! and the destination mesh partition file prefix -- are converted into
+    ! the complete filenames for the source and destination mesh partition files
+    ! using comm_size, the size of the MPI communicator.
+    !
     !-----------------------------------------------------------------------
-    function get_args(src_nc_file, src_part_prefix, dst_nc_file, dst_part_prefix) result(stat)
+    function get_args(comm_size, comm_rank, &
+                      src_nc_file, src_part_file, dst_nc_file, dst_part_file) result(stat)
 
         implicit none
 
         ! Arguments
+        integer, intent(in) :: comm_size
+        integer, intent(in) :: comm_rank
         character(len=*), intent(out) :: src_nc_file
-        character(len=*), intent(out) :: src_part_prefix
+        character(len=*), intent(out) :: src_part_file
         character(len=*), intent(out) :: dst_nc_file
-        character(len=*), intent(out) :: dst_part_prefix
+        character(len=*), intent(out) :: dst_part_file
 
         ! Return value
         integer :: stat
 
         ! Local variables
         logical :: exists
+        character(len=256) :: src_part_prefix, &
+                              dst_part_prefix
 
         stat = 0
 
         if (command_argument_count() /= 4) then
-            write(0,*) ''
-            write(0,*) 'Usage: mrtb <src netCDF mesh> <src partition prefix> <dst netCDF mesh> <dst partition prefix>'
-            write(0,*) ''
+            if (comm_rank == 0) then
+                write(0,*) ''
+                write(0,*) 'Usage: mrtb <src netCDF mesh> <src partition prefix> <dst netCDF mesh> <dst partition prefix>'
+                write(0,*) ''
+            end if
+
+            ! Ensure that rank 0 has been able to print error messages before returning
+            call MPI_Barrier(MPI_COMM_WORLD, ierr)
 
             stat = 1
             return
@@ -91,30 +109,80 @@ contains
         call get_command_argument(3, dst_nc_file)
         call get_command_argument(4, dst_part_prefix)
 
+        !
+        ! Build filenames of partition files
+        !
+        if (comm_size < 10) then
+            write(src_part_file, '(a,i1.1)') trim(src_part_prefix), comm_size
+            write(dst_part_file, '(a,i1.1)') trim(dst_part_prefix), comm_size
+        else if (comm_size < 100) then
+            write(src_part_file, '(a,i2.2)') trim(src_part_prefix), comm_size
+            write(dst_part_file, '(a,i2.2)') trim(dst_part_prefix), comm_size
+        else if (comm_size < 1000) then
+            write(src_part_file, '(a,i3.3)') trim(src_part_prefix), comm_size
+            write(dst_part_file, '(a,i3.3)') trim(dst_part_prefix), comm_size
+        else if (comm_size < 10000) then
+            write(src_part_file, '(a,i4.4)') trim(src_part_prefix), comm_size
+            write(dst_part_file, '(a,i4.4)') trim(dst_part_prefix), comm_size
+        else if (comm_size < 100000) then
+            write(src_part_file, '(a,i5.5)') trim(src_part_prefix), comm_size
+            write(dst_part_file, '(a,i5.5)') trim(dst_part_prefix), comm_size
+        else if (comm_size < 1000000) then
+            write(src_part_file, '(a,i6.6)') trim(src_part_prefix), comm_size
+            write(dst_part_file, '(a,i6.6)') trim(dst_part_prefix), comm_size
+        end if
+
         inquire(file=trim(src_nc_file), exist=exists)
         if (.not. exists) then
-            write(0,*) ''
-            write(0,*) 'Error: The source netCDF mesh file '//trim(src_nc_file)//' does not exist'
-            write(0,*) ''
+            if (comm_rank == 0) then
+                write(0,*) ''
+                write(0,*) 'Error: The source netCDF mesh file '//trim(src_nc_file)//' does not exist'
+                write(0,*) ''
+            end if
+            stat = stat + 1
+        end if
+
+        inquire(file=trim(src_part_file), exist=exists)
+        if (.not. exists) then
+            if (comm_rank == 0) then
+                write(0,*) ''
+                write(0,*) 'Error: The source mesh partition file '//trim(src_part_file)//' does not exist'
+                write(0,*) ''
+            end if
             stat = stat + 1
         end if
 
         inquire(file=trim(dst_nc_file), exist=exists)
         if (.not. exists) then
-            write(0,*) ''
-            write(0,*) 'Error: The destination netCDF mesh file '//trim(dst_nc_file)//' does not exist'
-            write(0,*) ''
+            if (comm_rank == 0) then
+                write(0,*) ''
+                write(0,*) 'Error: The destination netCDF mesh file '//trim(dst_nc_file)//' does not exist'
+                write(0,*) ''
+            end if
             stat = stat + 1
         end if
 
-        if (stat == 0) then
+        inquire(file=trim(dst_part_file), exist=exists)
+        if (.not. exists) then
+            if (comm_rank == 0) then
+                write(0,*) ''
+                write(0,*) 'Error: The destination mesh partition file '//trim(dst_part_file)//' does not exist'
+                write(0,*) ''
+            end if
+            stat = stat + 1
+        end if
+
+        if (stat == 0 .and. comm_rank == 0) then
             write(0,*) ''
-            write(0,*) 'Source netCDF mesh file:           '//trim(src_nc_file)
-            write(0,*) 'Source partition file prefix:      '//trim(src_part_prefix)
-            write(0,*) 'Destination netCDF mesh file:      '//trim(dst_nc_file)
-            write(0,*) 'Destination partition file prefix: '//trim(dst_part_prefix)
+            write(0,*) 'Source netCDF mesh file:      '//trim(src_nc_file)
+            write(0,*) 'Source partition file:        '//trim(src_part_file)
+            write(0,*) 'Destination netCDF mesh file: '//trim(dst_nc_file)
+            write(0,*) 'Destination partition file:   '//trim(dst_part_file)
             write(0,*) ''
         end if
+
+        ! Ensure that rank 0 has been able to print error messages before returning
+        call MPI_Barrier(MPI_COMM_WORLD, ierr)
 
     end function get_args
 
