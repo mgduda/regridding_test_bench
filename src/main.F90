@@ -2,6 +2,26 @@ program main
 
     use mpi
 
+    implicit none
+
+    interface 
+        subroutine read_element_decomp(fcomm, filename, n_elems_global, n_elems, elems) bind(c)
+            use iso_c_binding, only : c_char, c_int, c_ptr
+            implicit none
+            integer, value :: fcomm
+            character(kind=c_char), dimension(*), intent(in) :: filename
+            integer(kind=c_int), intent(inout) :: n_elems_global
+            integer(kind=c_int), intent(inout) :: n_elems
+            type (c_ptr), intent(inout) :: elems
+        end subroutine read_element_decomp
+
+        subroutine free_element_decomp(elems) bind(c)
+            use iso_c_binding, only : c_ptr
+            implicit none
+            type (c_ptr), intent(inout) :: elems
+        end subroutine free_element_decomp
+    end interface
+
     integer :: ierr
     integer :: comm_size, comm_rank
 
